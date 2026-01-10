@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Game Matchup - NCAA Hub</title>
+        <link rel="stylesheet" href="style.css">
+    </head>
+    <body>
+        <nav class="navbar">
+            <div class="navbar-container">
+                <div class="navbar-brand">
+                    <span class="brand-text">NCAA Hub</span>
+                </div>
+                <div class="navbar-menu">
+                    <a href="index.html" class="nav-item">Dashboard</a>
+                    <a href="bracket.html" id="bracket-link" class="nav-item">Mock Bracket</a>
+                    <a href="#" class="nav-item">NET Rankings</a>
+                    <a href="#" class="nav-item">Team Compare</a>
+                    <a href="#" class="nav-item">Player Stats</a>
+                </div>
+                <div class="navbar-search">
+                    <div class="unified-search-wrapper">
+                        <input type="text" id="unified-search" placeholder="Search players, teams, conferences..." autocomplete="off">
+                        <div id="unified-search-results" class="unified-dropdown"></div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Back Button -->
+        <div class="page-header">
+            <div class="container">
+                <button class="back-button" onclick="window.history.back()">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5M12 19l-7-7 7-7"/>
+                    </svg>
+                    Back
+                </button>
+            </div>
+        </div>
+
+        <!-- Matchup Header -->
+        <div class="matchup-header" id="matchup-header">
+            <!-- Dynamically populated -->
+        </div>
+
+        <!-- Game Prediction Section -->
+        <div class="section-container">
+            <div class="section-header">
+                <div class="section-title-wrapper">
+                    <h2 class="section-title">Score Prediction</h2>
+                </div>
+            </div>
+            <div id="prediction-container" class="matchup-prediction-container">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+
+        <!-- Team Stats Comparison -->
+        <div class="section-container">
+            <div class="section-header">
+                <div class="section-title-wrapper">
+                    <h2 class="section-title">Team Stats Comparison</h2>
+                </div>
+            </div>
+            <div id="stats-comparison-container" class="stats-comparison-grid">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+
+        <!-- Statistical Leaders -->
+        <div class="section-container">
+            <div class="section-header">
+                <div class="section-title-wrapper">
+                    <h2 class="section-title">Statistical Leaders</h2>
+                </div>
+            </div>
+            <div id="stat-leaders-container" class="stat-leaders-grid">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+
+        <!-- Recent Form -->
+        <div class="section-container">
+            <div class="section-header">
+                <div class="section-title-wrapper">
+                    <h2 class="section-title">Recent Form</h2>
+                </div>
+            </div>
+            <div id="recent-form-container" class="recent-form-grid">
+                <!-- Dynamically populated -->
+            </div>
+        </div>
+
+        <link rel="stylesheet" href="style.css">
+        <script type="module" src="../src/main.js"></script>
+        <script type="module">
+            import { renderMatchupDetails } from '../src/components/matchup/renderMatchupDetails.js';
+            
+            // Get game info from URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const team1 = urlParams.get('team1');
+            const team2 = urlParams.get('team2');
+            const date = urlParams.get('date');
+            const location = urlParams.get('location');
+            
+            if (team1 && team2) {
+                renderMatchupDetails(team1, team2, date, location);
+            } else {
+                document.getElementById('matchup-header').innerHTML = 
+                    '<div style="text-align: center; padding: 40px; color: #999;">Invalid matchup parameters</div>';
+            }
+        </script>
+    </body>
+</html>

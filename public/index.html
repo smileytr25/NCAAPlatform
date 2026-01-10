@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>NCAA Division 1 Basketball 2025-26</title>
+    </head>
+    <body style="visibility: hidden;">
+        <!-- Loading Overlay -->
+        <div id="page-loading-overlay" class="page-loading-overlay">
+            <div class="page-loading-content">
+                <div class="page-loading-spinner"></div>
+                <div class="page-loading-text">Loading dashboard...</div>
+            </div>
+        </div>
+
+        <nav class="navbar">
+            <div class="navbar-container">
+                <div class="navbar-brand">
+                    <span class="brand-text">NCAA Hub</span>
+                </div>
+                <div class="navbar-menu">
+                    <a href="#" class="nav-item active">Dashboard</a>
+                    <a href="#" id="bracket-link" class="nav-item">Mock Bracket</a>
+                    <a href="#" class="nav-item">NET Rankings</a>
+                    <a href="#" class="nav-item">Team Compare</a>
+                    <a href="#" class="nav-item">Player Stats</a>
+                </div>
+                <div class="navbar-search">
+                    <div class="unified-search-wrapper">
+                        <input type="text" id="unified-search" placeholder="Search players, teams, conferences..." autocomplete="off">
+                        <div id="unified-search-results" class="unified-dropdown"></div>
+                    </div>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Hero Section: Today's Games -->
+        <div id="hero-section" class="hero-section">
+            <div class="hero-container">
+                <div class="games-scroll-wrapper">
+                    <button class="scroll-arrow scroll-arrow-left" id="today-scroll-left">‹</button>
+                    <div id="todays-games-container" class="todays-games-scroll"></div>
+                    <button class="scroll-arrow scroll-arrow-right" id="today-scroll-right">›</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bracketology Promo Card -->
+        <div id="bracket-promo" class="bracket-promo-card">
+            <div class="promo-content">
+                <div class="promo-text">
+                    <h3>March Madness Bracket Projection</h3>
+                    <p>View our latest bracketology predictions based on NET rankings and team performance</p>
+                </div>
+                <button id="promo-bracket-btn" class="promo-button">View Bracket →</button>
+            </div>
+        </div>
+
+        <!-- Top 25 Section with Header -->
+        <div class="section-container">
+            <div class="section-header">
+                <div class="section-title-wrapper">
+                    <h2 class="section-title">AP Top 25</h2>
+                </div>
+                <a href="#" class="view-all-link">View Full Rankings →</a>
+            </div>
+            <div id="top25-panel"></div>
+        </div>
+
+        <!-- Conference Standings Preview -->
+        <div id="conference-preview" class="section-container">
+            <div class="section-header">
+                <div class="section-title-wrapper">
+                    <h2 class="section-title">Conference Leaders</h2>
+                </div>
+                <a href="#" class="view-all-link">View All Conferences →</a>
+            </div>
+            <div class="games-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" id="conference-scroll-left">‹</button>
+                <div id="conference-preview-grid" class="conference-scroll"></div>
+                <button class="scroll-arrow scroll-arrow-right" id="conference-scroll-right">›</button>
+            </div>
+        </div>
+
+        <!-- Top Players Section with Header -->
+        <div class="section-container">
+            <div class="section-header">
+                <div class="section-title-wrapper">
+                    <h2 class="section-title">Statistical Leaders</h2>
+                </div>
+                <a href="#" class="view-all-link">View All Stats →</a>
+            </div>
+            <div id="top-players-panel"></div>
+        </div>
+
+        <!-- Player Stats Promo Card (shown when carousel is hidden on small screens) -->
+        <div id="player-stats-promo" class="player-stats-promo-card" style="display: none;">
+            <div class="promo-content">
+                <div class="promo-text">
+                    <h3>Player Statistical Leaders</h3>
+                    <p>View complete per-game stat leaders across all categories including points, assists, rebounds, and more</p>
+                </div>
+                <button id="promo-player-stats-btn" class="promo-button">View Player Stats →</button>
+            </div>
+        </div>
+
+        <!-- Recent Games Section -->
+        <div id="recent-games-section" class="section-container">
+            <div class="section-header">
+                <div class="section-title-wrapper">
+                    <h2 class="section-title">Recent Results</h2>
+                </div>
+                <a href="#" class="view-all-link">View More →</a>
+            </div>
+            <div class="games-scroll-wrapper">
+                <button class="scroll-arrow scroll-arrow-left" id="recent-scroll-left">‹</button>
+                <div id="recent-games-container" class="recent-games-scroll"></div>
+                <button class="scroll-arrow scroll-arrow-right" id="recent-scroll-right">›</button>
+            </div>
+        </div>
+
+        <!-- Dynamic Content Areas -->
+        <div id="pg_stats"></div>
+        <div id="conference_standings" style="display: none;"></div>
+        
+        <!-- NET Rankings Section (Hidden by default) -->
+        <div id="net-rankings-section" class="section-container" style="display: none;">
+        </div>
+
+        <link rel="stylesheet" href="./style.css?v=3">
+        <script type="module" src="../src/main.js?v=3"></script>
+    </body>
+</html>
+
