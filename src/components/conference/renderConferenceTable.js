@@ -176,7 +176,14 @@ export async function renderConferenceTable(confName, PgStats, conferenceStandin
             objectFit: "contain"
         });
 
-        logo.src = await fetchTeamImage(row.Team);
+        // Load image asynchronously without blocking render
+        fetchTeamImage(row.Team)
+            .then(imageSrc => {
+                logo.src = imageSrc;
+            })
+            .catch(err => {
+                console.error(`Failed to load image for ${row.Team}:`, err);
+            });
 
         const rankBadge = createEl("div", {
             position: "absolute",

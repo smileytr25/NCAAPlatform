@@ -193,10 +193,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // NET Rankings navigation handler
+    // Rankings navigation handler
     const netRankingsNavItems = document.querySelectorAll('.nav-item');
     netRankingsNavItems.forEach(navItem => {
-        if (navItem.textContent.trim() === 'NET Rankings') {
+        if (navItem.textContent.trim() === 'Rankings') {
             navItem.addEventListener('click', async (e) => {
                 e.preventDefault();
                 currentView = "net-rankings";

@@ -9,12 +9,13 @@ import { showLoadingOverlay, hideLoadingOverlay } from "../../utils/loading.js";
 
 export async function renderTeamStats(team, PgStats, conferenceStandings, displayBoxScore, renderConferenceStats) {
 
-    // Show loading overlay
-    const loadingOverlay = showLoadingOverlay("Loading team stats...");
-    
-    PgStats.style.display = "block";
-    PgStats.innerHTML = "";
-    conferenceStandings.style.display = "none";
+    try {
+        // Show loading overlay
+        const loadingOverlay = showLoadingOverlay("Loading team stats...");
+        
+        PgStats.style.display = "block";
+        PgStats.innerHTML = "";
+        conferenceStandings.style.display = "none";
 
     // Home button
     const homeButton = createEl("button", {
@@ -335,4 +336,9 @@ export async function renderTeamStats(team, PgStats, conferenceStandings, displa
     console.log("Finalized team stats rendering for team:", team);
 
     loadingOverlay.remove();
+    } catch (error) {
+        console.error("Error rendering team stats:", error);
+        hideLoadingOverlay();
+        PgStats.innerHTML = '<div style="color: #BA0C2F; padding: 20px;">Error loading team stats. Please try again.</div>';
+    }
 }

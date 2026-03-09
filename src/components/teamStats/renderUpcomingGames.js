@@ -44,12 +44,19 @@ export async function renderUpcomingGames(team, games, container) {
         card.appendChild(gamesContainer);
         wrapper.appendChild(card);
         container.appendChild(wrapper);
-        return;
+        return container;
     }
 
     // Get team conference
-    const teamConferencesResponse = await fetch('http://localhost:4000/teams/all_team_conferences');
-    const teamConferences = teamConferencesResponse.ok ? await teamConferencesResponse.json() : {};
+    let teamConferences = {};
+    try {
+        const teamConferencesResponse = await fetch('http://localhost:4000/teams/all_team_conferences');
+        if (teamConferencesResponse.ok) {
+            teamConferences = await teamConferencesResponse.json();
+        }
+    } catch (error) {
+        console.error("Error fetching team conferences:", error);
+    }
     const teamConference = teamConferences[team];
 
     // Fetch predictions and standings for next 5 games in parallel

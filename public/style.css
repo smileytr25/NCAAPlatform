@@ -1450,7 +1450,41 @@ img, video {
 .net-rankings-subtitle {
     font-size: 16px;
     color: #666666;
-    margin-bottom: 16px;
+    margin-bottom: 20px;
+}
+
+.ratings-tabs-container {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 24px;
+    border-bottom: 3px solid var(--ncaa-red);
+    padding-bottom: 0;
+}
+
+.ratings-tab {
+    padding: 12px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    background: transparent;
+    color: var(--text-secondary);
+    border: none;
+    border-radius: 0;
+    cursor: pointer;
+    transition: all var(--transition-normal);
+    position: relative;
+    margin-bottom: -3px;
+}
+
+.ratings-tab:hover {
+    color: var(--ncaa-blue);
+    background: transparent;
+}
+
+.ratings-tab.active {
+    color: var(--ncaa-blue);
+    background: transparent;
+    border-bottom: 3px solid var(--ncaa-blue);
+    margin-bottom: -3px;
 }
 
 .net-rankings-legend {
@@ -1610,15 +1644,18 @@ img, video {
 .net-rankings-table-container {
     background: white;
     border-radius: 12px;
-    padding: 24px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
     overflow-x: auto;
 }
 
 .net-rankings-table {
     width: 100%;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     font-size: 15px;
+    margin-left: 24px;
+    margin-right: 24px;
+    margin-top: 24px;
 }
 
 .net-rankings-table thead {
@@ -1630,23 +1667,36 @@ img, video {
 }
 
 .net-rankings-table th {
-    padding: 16px;
+    padding: 12px 10px;
     text-align: left;
     font-weight: 700;
     color: #FFFFFF;
-    font-size: 13px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.8px;
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    letter-spacing: 0.5px;
+    white-space: nowrap;
 }
 
 .net-rankings-table th:last-child {
     border-right: none;
 }
 
-.net-rankings-table th.th-rank {
-    width: 60px;
+.net-rankings-table th.th-rank,
+.net-rankings-table th.th-kenpom_rank {
+    width: 85px;
     text-align: center;
+    position: sticky;
+    left: 0;
+    z-index: 11;
+    background: #00205B;
+}
+
+.net-rankings-table th.th-team {
+    position: sticky;
+    left: 85px;
+    z-index: 12;
+    background: #00205B;
+    box-shadow: -1px 0 0 0 rgba(255, 255, 255, 0.2);
 }
 
 .net-rankings-table tbody tr {
@@ -1656,7 +1706,6 @@ img, video {
 
 .net-rankings-table tbody tr:hover {
     background: #F0F4F8 !important;
-    transform: translateX(2px);
     box-shadow: 0 2px 4px rgba(0, 32, 91, 0.1);
 }
 
@@ -1679,7 +1728,7 @@ img, video {
 }
 
 .net-rankings-table td {
-    padding: 16px;
+    padding: 12px 10px;
     color: #222222;
 }
 
@@ -1688,12 +1737,30 @@ img, video {
     font-size: 18px;
     color: #00205B;
     text-align: center;
+    position: sticky;
+    left: 0;
+    z-index: 9;
+    background: #FFFFFF;
+    width: 85px;
+    min-width: 85px;
 }
 
 .team-name-cell {
     font-weight: 600;
     font-size: 16px;
     color: #222222;
+    width: 200px;
+    min-width: 200px;
+    position: sticky;
+    left: 85px;
+    z-index: 8;
+    background: #FFFFFF;
+    box-shadow: -1px 0 0 0 #E0E0E0;
+}
+
+.net-rankings-table tbody tr:hover .net-rank-cell,
+.net-rankings-table tbody tr:hover .team-name-cell {
+    background: #F0F4F8;
 }
 
 .conference-cell {
@@ -1726,6 +1793,14 @@ img, video {
 
 .quad-4 {
     color: #1976D2;
+}
+
+.kenpom-stat-cell {
+    font-family: 'Courier New', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ncaa-blue);
+    text-align: center;
 }
 
 .loading-spinner {

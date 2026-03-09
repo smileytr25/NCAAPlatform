@@ -90,15 +90,20 @@ export async function renderTeamInfoCard(team, conference, wins, losses, onConfe
     card.appendChild(header);
 
     // Fetch conference rank
-    fetchConferenceStandings(conference).then(rows => {
-        for (let i = 0; i < rows.length; i++) {
-            if (rows[i].Team === team && rows[i].rank !== "NR") {
-                badge.innerHTML = rows[i].rank;
-                return;
+    fetchConferenceStandings(conference)
+        .then(rows => {
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i].Team === team && rows[i].rank !== "NR") {
+                    badge.innerHTML = rows[i].rank;
+                    return;
+                }
             }
-        }
-        badge.style.display = "none";
-    });
+            badge.style.display = "none";
+        })
+        .catch(error => {
+            console.error(`Error fetching conference standings for ${conference}:`, error);
+            badge.style.display = "none";
+        });
 
     // RECORD, WIN%, CONF RANK SECTION
     const statsGrid = createEl("div", {
@@ -182,14 +187,19 @@ export async function renderTeamInfoCard(team, conference, wins, losses, onConfe
     statsGrid.appendChild(confRankBox);
 
     // Fill conf rank
-    fetchConferenceStandings(conference).then(rows => {
-        for (let i = 0; i < rows.length; i++) {
-            if (rows[i].Team === team) {
-                confRankVal.innerHTML = i + 1;
-                return;
+    fetchConferenceStandings(conference)
+        .then(rows => {
+            for (let i = 0; i < rows.length; i++) {
+                if (rows[i].Team === team) {
+                    confRankVal.innerHTML = i + 1;
+                    return;
+                }
             }
-        }
-    });
+        })
+        .catch(error => {
+            console.error(`Error fetching conference standings for ${conference}:`, error);
+            confRankVal.innerHTML = "—";
+        });
 
     card.appendChild(statsGrid);
     return card;

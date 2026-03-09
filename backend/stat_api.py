@@ -18,26 +18,39 @@ import psycopg2
 from pathlib import Path
 import joblib
 from scipy.interpolate import interp1d
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Database table for game_distribution_metrics cache:
-# CREATE TABLE IF NOT EXISTS game_distribution_metrics (
-#     team VARCHAR(255) NOT NULL,
-#     opponent VARCHAR(255) NOT NULL,
-#     gamedate DATE NOT NULL,
-#     n_samples INTEGER NOT NULL DEFAULT 20000,
-#     sims INTEGER NOT NULL DEFAULT 200,
-#     blowout_margin NUMERIC NOT NULL DEFAULT 15.0,
-#     metrics_json TEXT NOT NULL,
-#     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-#     PRIMARY KEY (team, opponent, gamedate, n_samples, sims, blowout_margin)
-# );
+get_team_pts_prediction_table_sql = """
+CREATE TABLE IF NOT EXISTS game_distribution_metrics (
+    team VARCHAR(255) NOT NULL,
+    opponent VARCHAR(255) NOT NULL,
+    gamedate DATE NOT NULL,
+    n_samples INTEGER NOT NULL DEFAULT 20000,
+    sims INTEGER NOT NULL DEFAULT 200,
+    blowout_margin NUMERIC NOT NULL DEFAULT 15.0,
+    metrics_json TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (team, opponent, gamedate, n_samples, sims, blowout_margin)
+);
+"""
 
 conn = psycopg2.connect(
     host="localhost",
     database="ncaa",
     port = 5432
 )
+
+conn.autocommit = True
+
 cursor = conn.cursor()
+
+cursor.execute(get_team_pts_prediction_table_sql)
 
 MODEL_Q5 = joblib.load("./models/model_q5.joblib")
 MODEL_Q10 = joblib.load("./models/model_q10.joblib")
@@ -64,8 +77,7 @@ matchups_df = pd.DataFrame(cursor.fetchall(), columns=cols)
 cursor.execute("SELECT DISTINCT conference FROM conferences;")
 conferences = {row[0] for row in cursor.fetchall()}
 
-cursor.execute("SELECT * FROM current_ap;")
-ap_poll = pd.DataFrame(cursor.fetchall(), columns=["Team", "rank"])
+ap_poll = pd.read_csv("./data/current_ap.csv")
 
 team_name_mapping = {
         "Connecticut": "UConn",
@@ -90,6 +102,8 @@ player_photos_df = pd.read_csv("./data/player_photos.csv")
 cursor.execute("SELECT * FROM schedule;")
 cols = [desc[0] for desc in cursor.description]
 schedule_df = pd.DataFrame(cursor.fetchall(), columns=cols)
+
+conference_tournament_winners = pd.read_csv("./data/tournament_winners.csv")
 
 def get_NET_ratings():
     url = "https://www.ncaa.com/rankings/basketball-men/d1/ncaa-mens-basketball-net-rankings"
@@ -117,6 +131,175 @@ def get_NET_ratings():
     df["Non-Div I L"] = df["Non-Div I"].str.extract(r'\d+-(\d+)').astype(int)
     df.drop(columns=["Quad 1", "Quad 2", "Quad 3", "Quad 4", "Home", "Road", "Neutral", "Record", "Non-Div I"], inplace=True)
     df.to_csv("./data/NET_ratings.csv", index=False)
+
+def get_kenpom_rankings():
+    """Scrape kenpom rankings using headless browser to bypass Cloudflare"""
+    
+    # Set Chrome options
+    options = Options()
+    options.add_argument("--headless=new")  # run without opening window
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--start-maximized")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    
+    # Start driver (Selenium 4 auto-manages driver)
+    driver = webdriver.Chrome(options=options)
+    
+    try:
+        # Open website
+        driver.get("https://kenpom.com/index.php")
+        
+        # Wait for table to load
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "table"))
+        )
+        
+        # Get full rendered HTML (after JS executes)
+        html = driver.page_source
+        
+        # Parse with BeautifulSoup
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        
+        if table:
+            # Convert HTML table to DataFrame
+            df = pd.read_html(StringIO(str(table)))[0]
+            
+            df.columns = [
+                "Rk", "Team", "Conf", "W-L", "NetRtg",
+                "ORtg", "ORtgRk", "DRtg", "DRtgRk",
+                "AdjT", "AdjTRk", "Luck", "LuckRk",
+                "SOS_NetRtg", "SOS_NetRtgRk",
+                "SOS_ORtg", "SOS_ORtgRk",
+                "SOS_DRtg", "SOS_DRtgRk",
+                "NCSOS_NetRtg", "NCSOS_NetRtgRk"
+            ]
+
+            df["Team"] = df["Team"].replace({
+                "McNeese" : "McNeese St.",
+                "CSUN" : "Cal St. Northridge",
+                "Nicholls" : "Nicholls St.",
+                "Southeast Missouri" : "Southeast Missouri St.",
+                "SIUE" : "SIU Edwardsville",
+                "Kansas City" : "UMKC"
+            })
+
+            # Save to CSV
+            df.to_csv("./data/kenpom_rankings.csv", index=False)
+            
+            print(f"Successfully scraped {len(df)} teams from kenpom.com")
+            print(f"Columns: {df.columns.tolist()}")
+        else:
+            print("Could not find table on page")
+            return None
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+        
+    finally:
+        # Always close browser properly
+        driver.quit()
+
+def get_barttorvik_rankings():
+    """Scrape kenpom rankings using headless browser to bypass Cloudflare"""
+    
+    # Set Chrome options
+    options = Options()
+    options.add_argument("--headless=new")  # run without opening window
+    options.add_argument("--disable-blink-features=AutomationControlled")
+    options.add_argument("--start-maximized")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
+    
+    # Start driver (Selenium 4 auto-manages driver)
+    driver = webdriver.Chrome(options=options)
+    
+    try:
+        # Open website
+        driver.get("https://barttorvik.com/#")
+        
+        # Wait for table to load
+        WebDriverWait(driver, 10).until(
+            EC.presence_of_element_located((By.TAG_NAME, "table"))
+        )
+        
+        # Get full rendered HTML (after JS executes)
+        html = driver.page_source
+        
+        # Parse with BeautifulSoup
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        
+        if table:
+            # Convert HTML table to DataFrame
+            df = pd.read_html(StringIO(str(table)))[0]
+
+            df.columns = [
+                "Rk", "Team", "Conf", "G", "W-L", "AdjOE_Val_and_Rank", 
+                "AdjDE_Val_and_Rank", "Barthag_Val_and_Rank", "EFG%_Val_and_Rank",
+                "EFGD%_Val_and_Rank", "TOR_Val_and_Rank", "TORD_Val_and_Rank",
+                "ORB_Val_and_Rank", "DRB_Val_and_Rank", "FTR_Val_and_Rank",
+                "FTRD_Val_and_Rank", "2P%_Val_and_Rank", "2P%D_Val_and_Rank",
+                "3P%_Val_and_Rank", "3P%D_Val_and_Rank", "3PR_Val_and_Rank",
+                "3PRD_Val_and_Rank", "AdjT_Val_and_Rank", "WAB_Val_and_Rank"
+            ]
+
+            # Remove repeated header row(s) that sometimes appear in scraped tables
+            df = df[df["Rk"].astype(str).str.fullmatch(r"\d+")].copy()
+
+            # Clean team names - remove location indicator like (A) or (H) and strip whitespace
+            df["Team"] = df["Team"].str.split("(").str[0].str.strip()
+            df["Team"] = df["Team"].str.split("vs.").str[0].str.strip()
+
+            def split_val_rank(source_col, value_col, rank_col):
+                extracted = df[source_col].astype(str).str.extract(r"^\s*([+-]?\d*\.?\d+)\s+(\d+)\s*$")
+                df[value_col] = pd.to_numeric(extracted[0], errors="coerce")
+                df[rank_col] = pd.to_numeric(extracted[1], errors="coerce").astype("Int64")
+
+            split_val_rank("AdjOE_Val_and_Rank", "AdjOE", "AdjOE_Rk")
+            split_val_rank("AdjDE_Val_and_Rank", "AdjDE", "AdjDE_Rk")
+            split_val_rank("Barthag_Val_and_Rank", "Barthag", "Barthag_Rk")
+            split_val_rank("EFG%_Val_and_Rank", "EFG%", "EFG%_Rk")
+            split_val_rank("EFGD%_Val_and_Rank", "EFGD%", "EFGD%_Rk")
+            split_val_rank("TOR_Val_and_Rank", "TOR", "TOR_Rk")
+            split_val_rank("TORD_Val_and_Rank", "TORD", "TORD_Rk")
+            split_val_rank("ORB_Val_and_Rank", "ORB", "ORB_Rk")
+            split_val_rank("DRB_Val_and_Rank", "DRB", "DRB_Rk")
+            split_val_rank("FTR_Val_and_Rank", "FTR", "FTR_Rk")
+            split_val_rank("FTRD_Val_and_Rank", "FTRD", "FTRD_Rk")
+            split_val_rank("2P%_Val_and_Rank", "2P%", "2P%_Rk")
+            split_val_rank("2P%D_Val_and_Rank", "2P%D", "2P%D_Rk")
+            split_val_rank("3P%_Val_and_Rank", "3P%", "3P%_Rk")
+            split_val_rank("3P%D_Val_and_Rank", "3P%D", "3P%D_Rk")
+            split_val_rank("3PR_Val_and_Rank", "3PR", "3PR_Rk")
+            split_val_rank("3PRD_Val_and_Rank", "3PRD", "3PRD_Rk")
+            split_val_rank("AdjT_Val_and_Rank", "AdjT", "AdjT_Rk")
+            split_val_rank("WAB_Val_and_Rank", "WAB", "WAB_Rk")
+
+            df.drop(columns=[
+                "AdjOE_Val_and_Rank", "AdjDE_Val_and_Rank", "Barthag_Val_and_Rank", "EFG%_Val_and_Rank",
+                "EFGD%_Val_and_Rank", "TOR_Val_and_Rank", "TORD_Val_and_Rank", "ORB_Val_and_Rank",
+                "DRB_Val_and_Rank", "FTR_Val_and_Rank", "FTRD_Val_and_Rank", "2P%_Val_and_Rank",
+                "2P%D_Val_and_Rank", "3P%_Val_and_Rank", "3P%D_Val_and_Rank", "3PR_Val_and_Rank",
+                "3PRD_Val_and_Rank", "AdjT_Val_and_Rank", "WAB_Val_and_Rank"
+            ], inplace=True)
+
+            # Save to CSV
+            df.to_csv("./data/barttorvik_rankings.csv", index=False)
+            
+            print(f"Successfully scraped {len(df)} teams from kenpom.com")
+            print(f"Columns: {df.columns.tolist()}")
+        else:
+            print("Could not find table on page")
+            return None
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        return None
+        
+    finally:
+        # Always close browser properly
+        driver.quit()
 
 def get_conference_standings(conference):
     # ------------------------------------------------------------------
@@ -1365,6 +1548,18 @@ def get_team_player_pg_stat_rank(team, stat, player):
     rank = leaders[leaders.player == player]["rank"].iloc[0]
     return {"Rank" : int(rank)}
 
+def get_conference_tournament_champ(conference):
+    conferences = NET_ratings.Conf.unique()
+
+    if conference not in conferences:
+        raise Exception(f"Conference not found: {conference}")
+    
+    if conference not in conference_tournament_winners.conf.unique():
+        return None
+    
+    conf_champ = conference_tournament_winners.loc[conference_tournament_winners.conf == conference, "team"].iloc[0]
+    return conf_champ
+
 def show_bracketology():
     national_sos_rankings = get_national_sos_rankings(team_ratings)
     national_sos_rankings = national_sos_rankings.rename(columns={'rank' : 'sos_rank'}).drop('team_conference', axis=1)
@@ -1372,7 +1567,7 @@ def show_bracketology():
     net_ratings = NET_ratings.rename(columns={
         "Rank" : "rank",
         "School" : "school",
-        "Conference" : "conference",
+        "Conf" : "conference",
         "Previous" : "previous",
         "Quad 1 W" : "quad1_w",
         "Quad 1 L" : "quad1_l",
@@ -1501,11 +1696,21 @@ def show_bracketology():
 
     net_ratings = net_ratings.merge(conf_standings, left_on="school", right_on="Team", how="left").drop("Team", axis=1).rename(columns={"rank" : "net_rank"})
     net_ratings = net_ratings.merge(national_sos_rankings, left_on="school", right_on="team", how="left").drop("team", axis=1)
+    
+    net_ratings["conf_tournament_champ"] = net_ratings.apply(lambda row: row.school == get_conference_tournament_champ(row.conference) if pd.notna(row.conference) else False, axis=1)
 
-    automatic_bids = net_ratings[net_ratings.conf_rank.eq(1)]
+    # Check if each conference has a tournament champion
+    conf_has_champ = net_ratings.groupby('conference')['conf_tournament_champ'].transform('any')
+    
+    # Automatic bid goes to conf_rank == 1, and either:
+    # - They are the tournament champion, OR
+    # - The conference doesn't have a tournament champion yet
+    mask = (net_ratings.conf_rank.eq(1) & ~conf_has_champ) | (net_ratings.conf_tournament_champ)
+    automatic_bids = net_ratings[mask].sort_values('net_rank')
     automatic_bids.loc[:, "bid_type"] = "auto"
 
-    at_large = net_ratings[net_ratings.conf_rank.ne(1)].sort_values('net_rank').head(37)
+    mask = (conf_has_champ & ~net_ratings.conf_tournament_champ) | (~conf_has_champ &net_ratings.conf_rank.ne(1))
+    at_large = net_ratings[mask].sort_values('net_rank').head(37)
     at_large.loc[:, "bid_type"] = "at-large"
 
     field = pd.concat([automatic_bids, at_large], axis=0)
@@ -2182,6 +2387,8 @@ def show_bracketology():
 
     generate_bracket_html(final_field)
 
+    field.to_csv("./data/field.csv", index=False)
+
 def build_pregame_features(history_df: pd.DataFrame, team: str, opponent: str, game_date, location: str):
     # --------------------------------------------------
     # Normalize date
@@ -2525,7 +2732,7 @@ def get_or_create_prediction(team, opponent, gamedate, location):
         row = cur.fetchone()
 
         if row is not None:
-            return json.loads(row[0])
+            return row[0]
 
         # ----------------------------
         # Compute prediction
@@ -2764,6 +2971,8 @@ def matchup_distribution_metrics(game_result, n_samples=20000, sims=200, blowout
 
 TEAM_RATINGS_FILE = "./data/team_ratings.pkl"
 NET_RATINGS_FILE = "./data/NET_ratings.csv"
+KENPOM_RATINGS_FILE = "./data/kenpom_rankings.csv"
+BARTTORVIK_RATINGS_FILE = "./data/barttorvik_rankings.csv"
 
 MAX_AGE_SECONDS = 24 * 60 * 60  # 1 day
 
@@ -2787,10 +2996,24 @@ if is_stale(NET_RATINGS_FILE, MAX_AGE_SECONDS):
 else:
     print("Using cached NET ratings...")
 
+if is_stale(KENPOM_RATINGS_FILE, MAX_AGE_SECONDS):
+    print("Recomputing KenPom ratings...")
+    get_kenpom_rankings()
+else:
+    print("Using cached KenPom ratings...")
+
+if is_stale(BARTTORVIK_RATINGS_FILE, MAX_AGE_SECONDS):
+    print("Recomputing BartTorvik ratings...")
+    get_barttorvik_rankings()
+else:
+    print("Using cached BartTorvik ratings...")
+
 with open(TEAM_RATINGS_FILE, "rb") as f:
     team_ratings = pickle.load(f)
 
 NET_ratings = pd.read_csv(NET_RATINGS_FILE)
+KENPOM_ratings = pd.read_csv(KENPOM_RATINGS_FILE)
+BARTTORVIK_ratings = pd.read_csv(BARTTORVIK_RATINGS_FILE)
 
 app = Flask(__name__)
 CORS(app)
@@ -2926,7 +3149,7 @@ def tournament_field():
     net_ratings = NET_ratings.rename(columns={
         "Rank" : "rank",
         "School" : "school",
-        "Conference" : "conference",
+        "Conf" : "conference",
         "Previous" : "previous",
         "Quad 1 W" : "quad1_w",
         "Quad 1 L" : "quad1_l",
@@ -3055,10 +3278,20 @@ def tournament_field():
 
     net_ratings = net_ratings.merge(conf_standings, left_on="school", right_on="Team", how="left").drop("Team", axis=1).rename(columns={"rank" : "net_rank"})
 
-    automatic_bids = net_ratings[net_ratings.conf_rank.eq(1)]
+    net_ratings["conf_tournament_champ"] = net_ratings.apply(lambda row: row.school == get_conference_tournament_champ(row.conference) if pd.notna(row.conference) else False, axis=1)
+
+    # Check if each conference has a tournament champion
+    conf_has_champ = net_ratings.groupby('conference')['conf_tournament_champ'].transform('any')
+    
+    # Automatic bid goes to conf_rank == 1, and either:
+    # - They are the tournament champion, OR
+    # - The conference doesn't have a tournament champion yet
+    mask = (net_ratings.conf_rank.eq(1) & ~conf_has_champ) | (net_ratings.conf_tournament_champ)
+    automatic_bids = net_ratings[mask].sort_values('net_rank')
     automatic_bids.loc[:, "bid_type"] = "auto"
 
-    at_large = net_ratings[net_ratings.conf_rank.ne(1)].sort_values('net_rank').head(37)
+    mask = (conf_has_champ & ~net_ratings.conf_tournament_champ) | (~conf_has_champ &net_ratings.conf_rank.ne(1))
+    at_large = net_ratings[mask].sort_values('net_rank').head(37)
     at_large.loc[:, "bid_type"] = "at-large"
 
     field = pd.concat([automatic_bids, at_large], axis=0)
@@ -3100,7 +3333,7 @@ def net_rankings():
     net_ratings = NET_ratings.rename(columns={
         "Rank" : "rank",
         "School" : "school",
-        "Conference" : "conference",
+        "Conf" : "conference",
         "Previous" : "previous",
         "Quad 1 W" : "quad1_w",
         "Quad 1 L" : "quad1_l",
@@ -3229,18 +3462,29 @@ def net_rankings():
 
     net_ratings = net_ratings.merge(conf_standings, left_on="school", right_on="Team", how="left").drop("Team", axis=1).rename(columns={"rank" : "net_rank"})
 
-    automatic_bids = net_ratings[net_ratings.conf_rank.eq(1)]
+    net_ratings["conf_tournament_champ"] = net_ratings.apply(lambda row: row.school == get_conference_tournament_champ(row.conference) if pd.notna(row.conference) else False, axis=1)
+
+    # Check if each conference has a tournament champion
+    conf_has_champ = net_ratings.groupby('conference')['conf_tournament_champ'].transform('any')
+    
+    # Automatic bid goes to conf_rank == 1, and either:
+    # - They are the tournament champion, OR
+    # - The conference doesn't have a tournament champion yet
+    mask = (net_ratings.conf_rank.eq(1) & ~conf_has_champ) | (net_ratings.conf_tournament_champ)
+    automatic_bids = net_ratings[mask].sort_values('net_rank')
     automatic_bids.loc[:, "bid_type"] = "auto"
 
-    at_large = net_ratings[net_ratings.conf_rank.ne(1)].sort_values('net_rank').head(37)
+    mask = (conf_has_champ & ~net_ratings.conf_tournament_champ) | (~conf_has_champ &net_ratings.conf_rank.ne(1))
+    at_large = net_ratings[mask].sort_values('net_rank').head(37)
     at_large.loc[:, "bid_type"] = "at-large"
     
     # Next 8 are bubble teams
-    bubble = net_ratings[net_ratings.conf_rank.ne(1)].sort_values('net_rank').iloc[37:45]
+    mask = (conf_has_champ & ~net_ratings.conf_tournament_champ) | (~conf_has_champ &net_ratings.conf_rank.ne(1))
+    bubble = net_ratings[mask].sort_values('net_rank').iloc[37:45]
     bubble.loc[:, "bid_type"] = "bubble"
     
     # Track at-large rank for all non-auto-bid teams
-    non_auto = net_ratings[net_ratings.conf_rank.ne(1)].sort_values('net_rank').copy()
+    non_auto = net_ratings[mask].sort_values('net_rank').copy()
     non_auto['at_large_rank'] = range(1, len(non_auto) + 1)
     
     # Create bid_type for all teams
@@ -3267,6 +3511,7 @@ def net_rankings():
     # Select and rename columns for clean output
     output = net_ratings[[
         "net_rank", "school", "conference", "w", "l",
+        "conference_wins", "conference_losses",
         "quad1_w", "quad1_l", "quad2_w", "quad2_l",
         "quad3_w", "quad3_l", "quad4_w", "quad4_l",
         "bid_type", "at_large_rank"
@@ -3276,6 +3521,8 @@ def net_rankings():
         "conference": "conference",
         "w": "wins",
         "l": "losses",
+        "conference_wins": "conf_wins",
+        "conference_losses": "conf_losses",
         "quad1_w": "q1_wins",
         "quad1_l": "q1_losses",
         "quad2_w": "q2_wins",
@@ -3284,6 +3531,301 @@ def net_rankings():
         "quad3_l": "q3_losses",
         "quad4_w": "q4_wins",
         "quad4_l": "q4_losses"
+    })
+    
+    return jsonify(output.replace({np.nan: None}).to_dict(orient="records"))
+
+@app.route("/rankings/kenpom_rankings", methods=["GET"])
+def kenpom_rankings():
+    conference = request.args.get("conference")
+
+    kenpom = KENPOM_ratings.rename(columns={
+        "Rk" : "kenpom_rank",
+        "Team" : "school",
+        "Conf" : "conference",
+        "W-L" : "w-l",
+        "NetRtg" : "netrtg",
+        "ORtg" : "ortg",
+        "ORtgRk" : "ortg_rk",
+        "DRtg" : "drtg",
+        "DRtgRk" : "drtg_rk",
+        "AdjT" : "adjt",
+        "AdjTRk" : "adjt_rk",
+        "Luck" : "luck",
+        "LuckRk" : "luck_rk",
+        "SOS_NetRtg" : "sos_netrtg",
+        "SOS_NetRtgRk" : "sos_netrtg_rk",
+        "SOS_ORtg" : "sos_ortg",
+        "SOS_ORtgRk" : "sos_ortg_rk",
+        "SOS_DRtg" : "sos_drtg",
+        "SOS_DRtgRk" : "sos_drtg_rk",
+        "NCSOS_NetRtg" : "ncsos_netrtg",
+        "NCSOS_NetRtgRk" : "ncsos_netrtg_rk"
+    })
+
+    kenpom['conference'] = kenpom['conference'].replace({
+        "A10" : "Atlantic 10",
+        "AE" : "America East",
+        "ASun" : "ASUN",
+        "Amer" : "American",
+        "B10" : "Big Ten",
+        "B12" : "Big 12",
+        "BE" : "Big East",
+        "BSky" : "Big Sky",
+        "BSth" : "Big South",
+        "BW" : "Big West",
+        "Horz" : "Horizon",
+        "Ivy" : "Ivy League",
+        "MWC" : "Mountain West",
+        "PL" : "Patriot League",
+        "SB" : "Sun Belt",
+        "SC" : "Southern",
+        "Slnd" : "Southland",
+        "Sum" : "Summit"
+    })
+
+    net_ratings = NET_ratings.rename(columns={
+        "Rank" : "rank",
+        "School" : "school",
+        "Conf" : "conference",
+        "Previous" : "previous",
+        "Quad 1 W" : "quad1_w",
+        "Quad 1 L" : "quad1_l",
+        "Quad 2 W" : "quad2_w",
+        "Quad 2 L" : "quad2_l",
+        "Quad 3 W" : "quad3_w",
+        "Quad 3 L" : "quad3_l",
+        "Quad 4 W" : "quad4_w",
+        "Quad 4 L" : "quad4_l",
+        "W" : "w", 
+        "L" : "l",
+        "Road W" : "road_w",
+        "Road L" : "road_l",
+        "Home W" : "home_w",
+        "Home L" : "home_l",
+        "Neutral W" : "neutral_w",
+        "Neutral L" : "neutral_l",
+        "Non-Div I W" : "non_div1_w",
+        "Non-Div I L" : "non_div1_l"
+    })
+
+    net_ratings['school'] = net_ratings['school'].str.replace(' St.', ' State')
+    net_ratings['school'] = net_ratings['school'].str.replace(' Ky.', ' Kentucky')
+    net_ratings['school'] = net_ratings['school'].str.replace('Ga.', 'Georgia')
+    net_ratings['school'] = net_ratings['school'].str.replace('Fla.', 'Florida')
+    net_ratings['school'] = net_ratings['school'].str.replace('Mich.', 'Michigan')
+
+    name_mapping = {
+        "North Carolina" : "UNC",
+        "Southern California" : "USC",
+        "McNeese" : "McNeese State",
+        "Seattle U" : "Seattle",
+        "UNI" : "Northern Iowa",
+        "Pittsburgh" : "Pitt",
+        "McNeese" : "McNeese State",
+        "Middle Tenn." : "Middle Tennessee",
+        "Saint Mary's (CA)" : "Saint Mary's",
+        "UC San Diego" : "UC-San Diego",
+        "SFA" : "Stephen F. Austin",
+        "LMU (CA)" : "Loyola Marymount",
+        "UNCW" : "UNC Wilmington",
+        "UC Irvine" : "UC-Irvine",
+        "UC Davis" : "UC-Davis",
+        "St. Thomas (MN)" : "St. Thomas",
+        "Southern Ill." : "Southern Illinois",
+        "Northern Colo." : "Northern Colorado",
+        "UC Santa Barbara" : "UCSB",
+        "Southern Miss." : "Southern Miss",
+        "UT Martin" : "UT-Martin",
+        "Col. of Charleston" : "College of Charleston",
+        "Massachusetts" : "UMass",
+        "FIU" : "Florida International",
+        "UTRGV" : "Texas-Rio Grande Valley",
+        "UIW" : "Incarnate Word",
+        "Charleston So." : "Charleston Southern",
+        "Nicholls" : "Nicholls State",
+        "A&M-Corpus Christi" : "Texas A&M-Corpus Christi",
+        "FGCU" : "Florida Gulf Coast",
+        "Southeast Mo. State" : "Southeast Missouri State",
+        "CSUN" : "Cal State Northridge",
+        "Central Ark." : "Central Arkansas",
+        "App State" : "Appalachian State",
+        "Central Conn. State" : "Central Connecticut",
+        "Lamar University" : "Lamar",
+        "Saint Joseph's" : "St. Joseph's",
+        "UC Riverside" : "UC-Riverside",
+        "SIUE" : "SIU-Edwardsville",
+        "Northern Ariz." : "Northern Arizona",
+        "Boston U." : "Boston University",
+        "Eastern Wash." : "Eastern Washington",
+        "N.C. A&T" : "North Carolina A&T",
+        "Saint Peter's" : "St. Peter's",
+        "Western Caro." : "Western Carolina",
+        "Southeastern La." : "Southeastern Louisiana",
+        "Army West Point" : "Army",
+        "Southern U." : "Southern",
+        "Ark.-Pine Bluff" : "Arkansas-Pine Bluff",
+        "North Ala." : "North Alabama",
+        "CSU Bakersfield" : "Cal State Bakersfield",
+        "Eastern Ill." : "Eastern Illinois",
+        "Loyola Chicago" : "Loyola (IL)",
+        "Alcorn" : "Alcorn State",
+        "Mount State Mary's" : "Mount St. Mary's",
+        "NIU" : "Northern Illinois",
+        "UAlbany" : "Albany (NY)",
+        "UMass Lowell" : "UMass-Lowell",
+        "IU Indy" : "IU Indianapolis",
+        "UMES" : "Maryland-Eastern Shore",
+        "Southern Ind." : "Southern Indiana",
+        "Western Ill." : "Western Illinois",
+        "Loyola Maryland" : "Loyola (MD)",
+        "N.C. Central" : "North Carolina Central",
+        "ULM" : "Louisiana-Monroe",
+        "Saint Francis" : "Saint Francis (PA)",
+        "Mississippi Val." : "Mississippi Valley State"
+    }
+
+    net_ratings['school'] = net_ratings['school'].replace(name_mapping)
+
+    net_ratings = net_ratings.rename(columns={"rank" : "net_rank"})
+
+    conferences = kenpom.conference.unique()
+
+    kenpom["w"] = kenpom["w-l"].str.split("-").str[0].astype("int")
+    kenpom["l"] = kenpom["w-l"].str.split("-").str[1].astype("int")
+    kenpom["w_pct"] = kenpom["w"] / (kenpom["w"] + kenpom["l"])
+
+    conf_standings = pd.DataFrame()
+    for conf in conferences:
+        this_conf = get_conference_standings(conf)
+        this_conf['conference'] = conf
+        conf_standings = pd.concat([conf_standings, this_conf], axis=0)
+    
+    kenpom["school"] = kenpom["school"].str.replace(" St.", " State")
+
+    kenpom_team_mapping = {
+        "Connecticut" : "UConn",
+        "St. John's" : "St. John's (NY)",
+        "North Carolina" : "UNC",
+        "Miami FL" : "Miami (FL)",
+        "Miami OH" : "Miami (OH)",
+        "N.C. State" : "NC State",
+        "Mississippi" : "Ole Miss",
+        "Pittsburgh" : "Pitt",
+        "Sam Houston State" : "Sam Houston",
+        "UC Irvine" : "UC-Irvine",
+        "Illinois Chicago" : "UIC",
+        "UC San Diego" : "UC-San Diego",
+        "UT Rio Grande Valley" : "Texas-Rio Grande Valley",
+        "UC Santa Barbara" : "UCSB",
+        "Cal Baptist" : "California Baptist",
+        "Saint Joseph's" : "St. Joseph's",
+        "East Tennessee State" : "ETSU",
+        "UC Davis" : "UC-Davis",
+        "Queens" : "Queens (NC)",
+        "Massachusetts" : "UMass",
+        "Charleston" : "College of Charleston",
+        "Texas A&M Corpus Chris" : "Texas A&M-Corpus Christi",
+        "FIU" : "Florida International",
+        "Tennessee Martin" : "UT-Martin",
+        "Bethune Cookman" : "Bethune-Cookman",
+        "Saint Peter's" : "St. Peter's",
+        "SIU Edwardsville" : "SIU-Edwardsville",
+        "UC Riverside" : "UC-Riverside",
+        "Nebraska Omaha" : "Omaha",
+        "Mount State Mary's" : "Mount St. Mary's",
+        "Grambling State" : "Grambling",
+        "Loyola Chicago" : "Loyola (IL)",
+        "IU Indy" : "IU Indianapolis",
+        "Prairie View A&M" : "Prairie View",
+        "Loyola MD" : "Loyola (MD)",
+        "Albany" : "Albany (NY)",
+        "Arkansas Pine Bluff" : "Arkansas-Pine Bluff",
+        "UMass Lowell" : "UMass-Lowell",
+        "Fairleigh Dickinson" : "FDU",
+        "Maryland Eastern Shore" : "Maryland-Eastern Shore",
+        "Louisiana Monroe" : "Louisiana-Monroe",
+        "Saint Francis" : "Saint Francis (PA)",
+        "UMKC" : "Kansas City",
+        "Gardner Webb" : "Gardner-Webb"
+    }
+
+    kenpom["school"] = kenpom["school"].replace(kenpom_team_mapping)
+
+    kenpom = pd.merge(kenpom, net_ratings[["school", "net_rank"]], on="school", how="left")
+
+    conf_standings = conf_standings.rename(columns={'rank' : 'ap_rank'})
+
+    conf_standings = conf_standings.drop(["wins", "losses", "overall_win_pct"], axis=1)
+
+    conf_standings['conf_rank'] = (
+        conf_standings.groupby('conference')
+        .cumcount()
+        .add(1)
+    )
+
+    conf_standings = conf_standings.drop('conference', axis=1)
+
+    kenpom = kenpom.merge(conf_standings, left_on="school", right_on="Team", how="left").drop("Team", axis=1).rename(columns={"rank" : "net_rank"})
+
+    kenpom["conf_tournament_champ"] = kenpom.apply(lambda row: row.school == get_conference_tournament_champ(row.conference) if pd.notna(row.conference) else False, axis=1)
+
+    # Check if each conference has a tournament champion
+    conf_has_champ = kenpom.groupby('conference')['conf_tournament_champ'].transform('any')
+    
+    # Automatic bid goes to conf_rank == 1, and either:
+    # - They are the tournament champion, OR
+    # - The conference doesn't have a tournament champion yet
+    mask = (kenpom.conf_rank.eq(1) & ~conf_has_champ) | (kenpom.conf_tournament_champ)
+    automatic_bids = kenpom[mask].sort_values('net_rank')
+    automatic_bids.loc[:, "bid_type"] = "auto"
+
+    mask = (conf_has_champ & ~kenpom.conf_tournament_champ) | (~conf_has_champ &kenpom.conf_rank.ne(1))
+    at_large = kenpom[mask].sort_values('net_rank').head(37)
+    at_large.loc[:, "bid_type"] = "at-large"
+    
+    # Next 8 are bubble teams
+    mask = (conf_has_champ & ~kenpom.conf_tournament_champ) | (~conf_has_champ &kenpom.conf_rank.ne(1))
+    bubble = kenpom[mask].sort_values('net_rank').iloc[37:45]
+    bubble.loc[:, "bid_type"] = "bubble"
+    
+    # Track at-large rank for all non-auto-bid teams
+    non_auto = kenpom[mask].sort_values('net_rank').copy()
+    non_auto['at_large_rank'] = range(1, len(non_auto) + 1)
+    
+    # Create bid_type for all teams
+    kenpom = kenpom.copy()
+    kenpom['bid_type'] = None  # Default to None
+    
+    # Set bid types for tournament teams
+    kenpom.loc[kenpom['school'].isin(automatic_bids['school']), 'bid_type'] = 'auto'
+    kenpom.loc[kenpom['school'].isin(at_large['school']), 'bid_type'] = 'at-large'
+    kenpom.loc[kenpom['school'].isin(bubble['school']), 'bid_type'] = 'bubble'
+    
+    # Merge at_large_rank for all teams
+    kenpom = kenpom.merge(
+        non_auto[['school', 'at_large_rank']],
+        on='school',
+        how='left'
+    )
+    
+    # Filter by conference if specified
+    if conference:
+        kenpom = kenpom[kenpom["conference"] == conference]
+    
+    kenpom = kenpom.sort_values('kenpom_rank')
+    # Select and rename columns for clean output
+    output = kenpom[[
+        "kenpom_rank", "net_rank", "school", "conference", "w", "l",
+        "netrtg", "ortg", "ortg_rk", "drtg", "drtg_rk",
+        "adjt", "adjt_rk", "luck", "luck_rk", "sos_netrtg", "sos_netrtg_rk",
+        "sos_ortg", "sos_ortg_rk", "sos_drtg", "sos_drtg_rk", "ncsos_netrtg",
+        "ncsos_netrtg_rk", "bid_type", "at_large_rank"
+    ]].rename(columns={
+        "school": "team",
+        "conference": "conference",
+        "w": "wins",
+        "l": "losses",
     })
     
     return jsonify(output.replace({np.nan: None}).to_dict(orient="records"))
@@ -3551,14 +4093,14 @@ def todays_games():
 
 @app.route("/games/recent_games", methods=["GET"])
 def recent_games():
-    """Get recent completed games from yesterday to 7 days ago"""
+    """Get recent completed games from the past 14 days"""
     try:
         n = int(request.args.get("n", 12))
         
-        # Calculate date range: yesterday to 7 days ago
+        # Calculate date range: past 14 days
         from datetime import timedelta
         today = datetime.now().date()
-        yesterday = today - timedelta(days=1)
+        start_date = today - timedelta(days=14)
         
         # Ensure matchups_df date column is in proper format
         matchups_copy = matchups_df.copy()
@@ -3570,9 +4112,9 @@ def recent_games():
         # Convert to date for comparison
         matchups_copy['date_only'] = matchups_copy['date'].dt.date
         
-        # Filter games within the date range
+        # Filter games within the date range (past 14 days, excluding today)
         recent = matchups_copy[
-            (matchups_copy['date_only'] == yesterday)
+            (matchups_copy['date_only'] < today) & (matchups_copy['date_only'] >= start_date)
         ].sort_values("date", ascending=False)
         
         # Deduplicate games

@@ -198,7 +198,12 @@ export async function renderPastGames(rows, team, onBoxScoreOpen) {
         append(row, left, right);
 
         // Await the team rank properly
-        const teamRank = await getTeamRank(team);
+        let teamRank = "NR";
+        try {
+            teamRank = await getTeamRank(team);
+        } catch (err) {
+            console.warn(`Error fetching team rank for ${team}:`, err);
+        }
 
         const teamRanks = {
             [team]: teamRank,
